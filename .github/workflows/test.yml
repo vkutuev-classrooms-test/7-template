@@ -1,0 +1,120 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test-group-1:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check building
+        shell: bash
+        run: |
+          make clean && \
+          make && \
+          [ -x ./build/sorter ] && \
+          rm ./build/sorter && \
+          make all && \
+          [ -x ./build/sorter ] && \
+          make clean
+      - name: Check target all change only BUILD_DIR
+        shell: bash
+        run: |
+          make clean && \
+          make all && \
+          [ "$(git status -s)" == "?? build/" ] && \
+          make clean
+      - name: Check clean target
+        shell: bash
+        run: |
+          make clean && \
+          make && \
+          make clean && \
+          [ -z "$(git status -s)" ]
+      - name: .PHONY
+        shell: bash
+        run: |
+          make clean && \
+          touch all clean && \
+          [[ -n "$(make -n)" && -n "$(make all -n)" && -n "$(make clean -n)" ]] && \
+          rm -f all clean
+      - name: Check rebuild
+        shell: bash
+        run: |          make clean && \
+          make all && \
+          [ -z "$(make all -n)" ] && \
+          make clean
+      - name: Check dependency on CONFIG.cfg
+        shell: bash
+        run: |
+          make clean && \
+          sed -i 's/build/build_dir/g' CONFIG.cfg && \
+          make && \
+          [ -x ./build_dir/sorter ] && \
+          rm -rf ./build_dir && \
+          sed -i 's/build_dir/build/g' CONFIG.cfg && \
+          make clean
+
+  test-group-3:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check clean target
+        shell: bash
+        run: |
+          make && \
+          make check && \
+          make clean && \
+          [ -z "$(git status -s)" ]
+      - name: Check target all change only BUILD_DIR
+        shell: bash
+        run: |
+          make clean && \
+          make all && \
+          [ "$(git status -s)" == "?? build/" ] && \
+          make clean
+      - name: .PHONY
+        shell: bash
+        run: |
+         touch all check clean && \
+         [[ -n "$(make -n)" && -n "$(make all -n)" && -n "$(make check -n)" && -n "$(make clean -n)" ]] && \
+         rm -f all check clean
+      - name: Check rebuild
+        shell: bash
+        run: |          make clean && \
+          make all && \
+          [ -z "$(make all -n)" ] && \
+          make clean
+      - name: Changed one src
+        shell: bash
+        run: |
+          make clean && \
+          make
+          if [[ ! -d src || -z "$(ls src)" ]]; then exit 0; fi
+          CHANGED_SRC=./src/$(ls -1 -t ./src/ | head -1) && \
+          echo "Touch $CHANGED_SRC" && \
+          touch "$CHANGED_SRC" && \
+          [ -n "$(make -n $CHANGED_SRC)" ] && \
+          make clean
+      - name: Touch test
+        shell: bash
+        run: |
+          make clean && \
+          make && \
+          make check && \
+          touch test/last.in && \
+          [ -n "$(make check)" ] && \
+          make clean
+      - name: Failed test
+        shell: bash
+        run: |
+          make clean && \
+          cp test/2.out test/backup_2.out && \
+          sed -i 's/[aA]//g' test/2.out && \
+          ! make check && \
+          mv test/backup_2.out test/2.out && \
+          make clean
+
